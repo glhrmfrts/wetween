@@ -109,7 +109,7 @@ type
 
   TWeTimeline = class(TWeItem)
   private
-    Items : TWeTimelineItemList;
+    Items : array of TWeTimelineItem;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -131,6 +131,7 @@ type
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
 
+    function NewTimeline: TWeTimeline;
     procedure Update(const SecondsPassed: Single);
   end;
 
@@ -203,6 +204,8 @@ begin
   Result := TWeTween.Create(Self.Owner);
   Result.Duration := Duration;
   Result.Easing := Easing;
+  Result.ValueCallback := ValueCallback;
+  Result.ValueObjectCallback := ValueObjectCallback;
 
   for I := Low(Values) to High(Values) do
   begin
@@ -266,13 +269,12 @@ end;
 constructor TWeTimeline.Create(AOwner: TComponent);
 begin
   inherited;
-  Items := TWeTimelineItemList.Create;
 end;
 
 
 destructor TWeTimeline.Destroy;
 begin
-  FreeAndNil(Items);
+  SetLength(items, 0);
   inherited;
 end;
 
@@ -285,21 +287,22 @@ end;
 
 procedure TWeTimeline.AdjustDuration();
 var
-  Item : TWeTimelineItem;
+  I : Integer;
   ChildTimeline : TWeTimeline;
 begin
   Duration := 0;
-  for Item in Items do
+  for I := 0 to High(Items) do
   begin
-    Duration := Duration + Item.Span;
-    if Item.Item <> nil then
+    Items[I].Offset := Duration;
+    Duration := Duration + Items[I].Span;
+    if Items[I].Item <> nil then
     begin
-      if Item.Item is TWeTimeline then
+      if Items[I].Item is TWeTimeline then
       begin
-        ChildTimeline := TWeTimeline(Item.Item);
+        ChildTimeline := TWeTimeline(Items[I].Item);
         ChildTimeline.AdjustDuration();
       end;
-      Duration := Duration + Item.Item.Duration;
+      Duration := Duration + Items[I].Item.Duration;
     end;
   end;
 end;
@@ -315,7 +318,7 @@ begin
   if not Playing then Exit;
 
   Comp := TWeTimelineItemComparer.Create;
-  Items.Sort(Comp);
+//  Items.Sort(Comp);
   FreeAndNil(Comp);
 
   for Item in Items do
@@ -337,25 +340,29 @@ end;
 
 procedure TWeTimeline.InsertSpan(const Span: Single);
 var
-  NewItem : TWeTimelineItem;
+  NewItem : TWeTimelineItem = ();
 begin
   AdjustDuration();
   NewItem.Offset := Duration;
   NewItem.Span := Span;
   Duration := Duration + Span;
-  Items.Add(NewItem);
+
+  SetLength(Items, Length(Items) + 1);
+  Items[High(Items)] := NewItem;
 end;
 
 
 procedure TWeTimeline.InsertAtEnd(T: TWeItem);
 var
-  NewItem : TWeTimelineItem;
+  NewItem : TWeTimelineItem = ();
 begin
   AdjustDuration();
   NewItem.Item := T;
   NewItem.Offset := Duration;
   Duration := Duration + T.Duration;
-  Items.Add(NewItem);
+
+  SetLength(Items, Length(Items) + 1);
+  Items[High(Items)] := NewItem;
 end;
 
 
@@ -386,6 +393,13 @@ destructor TWeManager.Destroy;
 begin
   inherited;
   FreeAndNil(Items);
+end;
+
+
+function TWeManager.NewTimeline: TWeTimeline;
+begin
+  Result := TWeTimeline.Create(Self);
+  Items.Add(Result);
 end;
 
 
