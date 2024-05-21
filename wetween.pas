@@ -49,15 +49,25 @@ type
   TWeInterpolateFunction = function (const X, A, B: Single): Single;
 
   TWeItem = class(TComponent)
+  protected
+    fPosition : Single;
+
+    function GetPosition: Single;
+    procedure SetPosition(const P: Single);
+
+    procedure PositionChanged; virtual;
   public
     Playing : Boolean;
-    Position : Single;
     Duration : Single;
+    ItemTag : String;
 
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
 
     procedure Update(); virtual;
+
+  published
+    property Position : Single read GetPosition write SetPosition;
   end;
 
   TWeTweenValueCallback = procedure (constref Vals: array of Single);
@@ -96,12 +106,29 @@ type
     destructor Destroy; override;
 
     procedure Update(); override;
+
+    procedure Reset;
+  end;
+
+  TWeSpan = class(TWeItem)
+  end;
+
+  TWeGroup = class(TWeItem)
+  private
+    Items : array of TWeItem;
+  public
+    destructor Destroy; override;
+
+    procedure PositionChanged; override;
+    procedure Update(); override;
+    procedure Insert(T: TWeItem);
+
+    procedure AdjustDuration;
   end;
 
   TWeTimelineItem = record
     Item : TWeItem;
     Offset : Single;
-    Span : Single;
   end;
 
   TWeItemList = specialize TList<TWeItem>;
@@ -114,6 +141,7 @@ type
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
 
+    procedure PositionChanged; override;
     procedure Update(); override;
 
     procedure AdjustDuration();
@@ -180,6 +208,22 @@ end;
 procedure TWeItem.Update();
 begin
 end;
+
+
+function TWeItem.GetPosition: Single;
+begin
+  Result := fPosition;
+end;
+
+
+procedure TWeItem.SetPosition(const P: Single);
+begin
+  fPosition := P;
+  PositionChanged;
+end;
+
+
+procedure TWeItem.PositionChanged; begin end;
 
 
 constructor TWeTween.Create(AOwner: TComponent);
@@ -266,6 +310,93 @@ begin
 end;
 
 
+procedure TWeEvent.Reset;
+begin
+  fCallbackCalled := false;
+end;
+
+
+destructor TWeGroup.Destroy;
+begin
+  SetLength(Items, 0);
+  inherited;
+end;
+
+
+procedure TWeGroup.Insert(T: TWeItem);
+begin
+  SetLength(Items, Length(Items) + 1);
+  Items[High(Items)] := T;
+end;
+
+
+procedure TWeGroup.PositionChanged;
+var
+  I: Integer;
+begin
+  if fPosition = 0 then
+  begin
+    for I := 0 to High(Items) do
+    begin
+      Items[I].Position := fPosition;
+      if Items[I] is TWeEvent then
+      begin
+        TWeEvent(Items[I]).Reset;
+      end;
+    end;
+  end;
+end;
+
+
+procedure TWeGroup.AdjustDuration;
+var
+  I : Integer;
+begin
+  Duration := 0;
+
+  for I := 0 to High(Items) do
+  begin
+    if Items[I] is TWeTimeline then
+    begin
+      TWeTimeline(Items[I]).AdjustDuration;
+    end;
+
+    if Items[I] is TWeGroup then
+    begin
+      TWeGroup(Items[I]).AdjustDuration;
+    end;
+
+    Duration := Max(Duration, Items[I].Duration);
+  end;
+end;
+
+
+procedure TWeGroup.Update;
+var
+  Item: TWeItem;
+begin
+  inherited;
+
+  if not Playing then exit;
+
+  for Item in Items do
+  begin
+    Item.Position := Position;
+
+    if Item is TWeTimeline then
+      TWeTimeline(Item).AdjustDuration;
+    if Item is TWeGroup then
+      TWeGroup(Item).AdjustDuration;
+
+    Item.Update;
+
+    Item.Playing := (Item.Position > 0.0) and (Item.Position <= Item.Duration);
+  end;
+
+  if Position > Duration then Playing := false;
+end;
+
+
 constructor TWeTimeline.Create(AOwner: TComponent);
 begin
   inherited;
@@ -285,23 +416,44 @@ begin
 end;
 
 
+procedure TWeTimeline.PositionChanged;
+var
+  I: Integer;
+begin
+  if fPosition = 0 then
+  begin
+    for I := 0 to High(Items) do
+    begin
+      if Items[I].Item is TWeEvent then
+      begin
+        { TODO: actually check the event's offset }
+        TWeEvent(Items[I].Item).Reset;
+      end;
+    end;
+  end;
+end;
+
+
 procedure TWeTimeline.AdjustDuration();
 var
   I : Integer;
-  ChildTimeline : TWeTimeline;
 begin
   Duration := 0;
   for I := 0 to High(Items) do
   begin
     Items[I].Offset := Duration;
-    Duration := Duration + Items[I].Span;
     if Items[I].Item <> nil then
     begin
       if Items[I].Item is TWeTimeline then
       begin
-        ChildTimeline := TWeTimeline(Items[I].Item);
-        ChildTimeline.AdjustDuration();
+        TWeTimeline(Items[I].Item).AdjustDuration();
       end;
+
+      if Items[I].Item is TWeGroup then
+      begin
+        TWeGroup(Items[I].Item).AdjustDuration();
+      end;
+
       Duration := Duration + Items[I].Item.Duration;
     end;
   end;
@@ -341,10 +493,13 @@ end;
 procedure TWeTimeline.InsertSpan(const Span: Single);
 var
   NewItem : TWeTimelineItem = ();
+  SpanItem : TWeSpan;
 begin
   AdjustDuration();
+  SpanItem := TWeSpan.Create(Self);
+  SpanItem.Duration := Span;
+  NewItem.Item := SpanItem;
   NewItem.Offset := Duration;
-  NewItem.Span := Span;
   Duration := Duration + Span;
 
   SetLength(Items, Length(Items) + 1);
@@ -413,6 +568,8 @@ begin
 
     if Item is TWeTimeline then
       TWeTimeline(Item).AdjustDuration();
+    if Item is TWeGroup then
+      TWeGroup(Item).AdjustDuration();
 
     Item.Update();
   end;
