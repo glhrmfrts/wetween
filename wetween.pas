@@ -43,10 +43,14 @@ type
     weEaseOutSine,
     weEaseOutQuad,
     weEaseOutCubic,
-    weEaseOutQuart
+    weEaseOutQuart,
+    weEaseInOutSine,
+    weEaseInOutQuad,
+    weEaseInOutCubic,
+    weEaseInOutQuart
   );
 
-  TWeInterpolateFunction = function (const X, A, B: Single): Single;
+  TWeInterpolateFunction = function (const X: Single): Single;
 
   TWeItem = class(TComponent)
   protected
@@ -163,20 +167,24 @@ type
     procedure Update(const SecondsPassed: Single);
   end;
 
-  TWeTimelineItemComparer = class(TInterfacedObject, specialize IComparer<TWeTimelineItem>)
+  TWeTimelineItemComparer = class(TInterfacedObject)
     function Compare(constref Left, Right: TWeTimelineItem): Integer;
   end;
 
 
-function LinearLerp(const X, A, B: Single): Single;
-function EaseInSineLerp(const X, A, B: Single): Single;
-function EaseInQuadLerp(const X, A, B: Single): Single;
-function EaseInCubicLerp(const X, A, B: Single): Single;
-function EaseInQuartLerp(const X, A, B: Single): Single;
-function EaseOutSineLerp(const X, A, B: Single): Single;
-function EaseOutQuadLerp(const X, A, B: Single): Single;
-function EaseOutCubicLerp(const X, A, B: Single): Single;
-function EaseOutQuartLerp(const X, A, B: Single): Single;
+function LinearLerp(const X: Single): Single;
+function EaseInSineLerp(const X: Single): Single;
+function EaseInQuadLerp(const X: Single): Single;
+function EaseInCubicLerp(const X: Single): Single;
+function EaseInQuartLerp(const X: Single): Single;
+function EaseOutSineLerp(const X: Single): Single;
+function EaseOutQuadLerp(const X: Single): Single;
+function EaseOutCubicLerp(const X: Single): Single;
+function EaseOutQuartLerp(const X: Single): Single;
+function EaseInOutSineLerp(const X: Single): Single;
+function EaseInOutQuadLerp(const X: Single): Single;
+function EaseInOutCubicLerp(const X: Single): Single;
+function EaseInOutQuartLerp(const X: Single): Single;
 
 
 var
@@ -272,7 +280,7 @@ begin
 
   for I := Low(Values) to High(Values) do
   begin
-    Values[I] := LerpFuncs[Easing](X, Start[I], Stop[I]);
+    Values[I] := Start[I] + (LerpFuncs[Easing](X) * (Stop[I] - Start[I]));
   end;
 
   if ValueCallback <> nil then
@@ -470,7 +478,7 @@ begin
   if not Playing then Exit;
 
   Comp := TWeTimelineItemComparer.Create;
-//  Items.Sort(Comp);
+  //Items.Sort(Comp);
   FreeAndNil(Comp);
 
   for Item in Items do
@@ -576,57 +584,81 @@ begin
 end;
 
 
-function LinearLerp(const X, A, B: Single): Single;
+function LinearLerp(const X: Single): Single;
 begin
-  Result := A + X * (B - A);
+  Result := X ;
 end;
 
 
-function EaseInSineLerp(const X, A, B: Single): Single;
+function EaseInSineLerp(const X: Single): Single;
 begin
-  Result := A + (1 - Cos((X * PI) / 2)) * (B - A);
+  Result := (1 - Cos((X * PI) / 2)) ;
 end;
 
 
-function EaseInQuadLerp(const X, A, B: Single): Single;
+function EaseInQuadLerp(const X: Single): Single;
 begin
-  Result := A + (X * X) * (B - A);
+  Result := (X * X) ;
 end;
 
 
-function EaseInCubicLerp(const X, A, B: Single): Single;
+function EaseInCubicLerp(const X: Single): Single;
 begin
-  Result := A + (X * X * X) * (B - A);
+  Result := (X * X * X) ;
 end;
 
 
-function EaseInQuartLerp(const X, A, B: Single): Single;
+function EaseInQuartLerp(const X: Single): Single;
 begin
-  Result := A + (X * X * X * X) * (B - A);
+  Result := (X * X * X * X) ;
 end;
 
 
-function EaseOutSineLerp(const X, A, B: Single): Single;
+function EaseOutSineLerp(const X: Single): Single;
 begin
-  Result := A + (Sin((X * PI) / 2)) * (B - A);
+  Result := (Sin((X * PI) / 2)) ;
 end;
 
 
-function EaseOutQuadLerp(const X, A, B: Single): Single;
+function EaseOutQuadLerp(const X: Single): Single;
 begin
-  Result := A + (1 - (1 - x) * (1 - x)) * (B - A);
+  Result := (1 - (1 - x) * (1 - x)) ;
 end;
 
 
-function EaseOutCubicLerp(const X, A, B: Single): Single;
+function EaseOutCubicLerp(const X: Single): Single;
 begin
-  Result := A + (1 - Power(1 - x, 3)) * (B - A);
+  Result := (1 - Power(1 - x, 3)) ;
 end;
 
 
-function EaseOutQuartLerp(const X, A, B: Single): Single;
+function EaseOutQuartLerp(const X: Single): Single;
 begin
-  Result := A + (1 - Power(1 - x, 4)) * (B - A);
+  Result := (1 - Power(1 - x, 4)) ;
+end;
+
+
+function EaseInOutSineLerp(const X: Single): Single;
+begin
+  Result := EaseOutSineLerp(EaseInSineLerp(X));
+end;
+
+
+function EaseInOutQuadLerp(const X: Single): Single;
+begin
+  Result := EaseOutQuadLerp(EaseInQuadLerp(X));
+end;
+
+
+function EaseInOutCubicLerp(const X: Single): Single;
+begin
+  Result := EaseOutCubicLerp(EaseInCubicLerp(X));
+end;
+
+
+function EaseInOutQuartLerp(const X: Single): Single;
+begin
+  Result := EaseOutQuartLerp(EaseInQuartLerp(X));
 end;
 
 
@@ -641,5 +673,9 @@ initialization
   LerpFuncs[weEaseOutQuad] := @EaseOutQuadLerp;
   LerpFuncs[weEaseOutCubic] := @EaseOutCubicLerp;
   LerpFuncs[weEaseOutQuart] := @EaseOutQuartLerp;
+  LerpFuncs[weEaseInOutSine] := @EaseInOutSineLerp;
+  LerpFuncs[weEaseInOutQuad] := @EaseInOutQuadLerp;
+  LerpFuncs[weEaseInOutCubic] := @EaseInOutCubicLerp;
+  LerpFuncs[weEaseInOutQuart] := @EaseInOutQuartLerp;
 
 end.
