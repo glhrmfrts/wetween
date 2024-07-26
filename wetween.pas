@@ -64,6 +64,8 @@ type
     Playing : Boolean;
     Duration : Single;
     ItemTag : String;
+    RemoveOnFinish : Boolean;
+    DestroyOnFinish : Boolean;
 
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -159,6 +161,7 @@ type
   public
     RootTimeline : TWeTimeline;
     Items : TWeItemList;
+    ItemsToRemove : TWeItemList;
 
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -477,10 +480,6 @@ begin
 
   if not Playing then Exit;
 
-  Comp := TWeTimelineItemComparer.Create;
-  //Items.Sort(Comp);
-  FreeAndNil(Comp);
-
   for Item in Items do
   begin
     if Item.Item <> nil then
@@ -504,6 +503,7 @@ var
   SpanItem : TWeSpan;
 begin
   AdjustDuration();
+
   SpanItem := TWeSpan.Create(Self);
   SpanItem.Duration := Span;
   NewItem.Item := SpanItem;
@@ -548,6 +548,7 @@ begin
   inherited;
   RootTimeline := TWeTimeline.Create(Self);
   Items := TWeItemList.Create;
+  ItemsToRemove := TWeItemList.Create;
   Items.Add(RootTimeline);
 end;
 
@@ -570,6 +571,8 @@ procedure TWeManager.Update(const SecondsPassed: Single);
 var
   Item : TWeItem;
 begin
+  ItemsToRemove.Clear;
+
   for Item in Items do
   begin
     Item.Position := Item.Position + SecondsPassed;
@@ -579,7 +582,16 @@ begin
     if Item is TWeGroup then
       TWeGroup(Item).AdjustDuration();
 
+    if (Item.Position >= Item.Duration) and Item.RemoveOnFinish then
+      ItemsToRemove.Add(Item);
+
     Item.Update();
+  end;
+
+  for Item in ItemsToRemove do
+  begin
+    Items.Remove(Item);
+    if Item.DestroyOnFinish then Item.Free;
   end;
 end;
 
